@@ -27,11 +27,11 @@ class ModelicaEnv(gym.Env):
     viz_modes = {'episode', 'step', None}
     """Set of all valid visualisation modes"""
 
-    def __init__(self, net: Union[str, Network], time_start: float = 0,
-                 reward_fun: Callable[[List[str], np.ndarray], float] = lambda cols, obs: 1, is_normalized=True,
+    def __init__(self,net: Union[str, Network],  time_start: float = 0,
+                 reward_fun: Callable[[List[str], np.ndarray, float], float] = lambda cols, obs, risk: 1, is_normalized=True,
                  log_level: int = logging.WARNING, solver_method: str = 'LSODA', max_episode_steps: Optional[int] = 200,
                  model_params: Optional[Dict[str, Union[Callable[[float], float], float]]] = None,
-                 model_path: str = '../fmu/grid.network.fmu',
+                 model_path: str = '../omg_grid/grid.network.fmu',
                  viz_mode: Optional[str] = 'episode', viz_cols: Optional[Union[str, List[Union[str, PlotTmpl]]]] = None,
                  history: EmptyHistory = FullHistory()):
         """
@@ -41,7 +41,8 @@ class ModelicaEnv(gym.Env):
         :param time_start: offset of the time in seconds
 
         :param reward_fun:
-            The function receives as a list of variable names and a np.ndarray of the values of the current observation.
+            params: The function receives as a list of variable names and a np.ndarray of the values
+             of the current observation as well as a risk value between 0 and 1.
             The separation is mainly for performance reasons, such that the resolution of data indices can be cached.
             It must return the reward of this timestep as float.
             It should return np.nan or -np.inf or None in case of a failiure.
@@ -206,9 +207,8 @@ class ModelicaEnv(gym.Env):
         :return: True if simulation time exceeded
         """
         if self._failed:
-            logger.info(f'reward was extreme, episode terminated')
+            logger.info(f'risk level exceeded')
             return True
-        # TODO allow for other stopping criteria
         logger.debug(f't: {self.sim_time_interval[1]}, ')
         return abs(self.sim_time_interval[1]) > self.time_end
 
@@ -248,6 +248,8 @@ class ModelicaEnv(gym.Env):
         :param action: action to be executed.
         :return: state, reward, is done, info
         """
+
+
         logger.debug("Experiment next step was called.")
         if self.is_done:
             logger.warning(
@@ -283,6 +285,7 @@ class ModelicaEnv(gym.Env):
         params =  {**values, **self.net.params(action)}
         if params:
             self.model.set_params(**params)
+        risk = self.net.risk()
 
         # Simulate and observe result state
         self._state = self._simulate()
@@ -301,11 +304,11 @@ class ModelicaEnv(gym.Env):
         else:
             logger.debug("Experiment step done, experiment done.")
 
-        reward = self.reward(self.history.cols, obs)
-        self._failed = np.isnan(reward) or np.isinf(reward) and reward < 0 or reward is None
+        reward = self.reward(self.history.cols, obs, risk)
+        self._failed = risk >= 1 or np.isnan(reward) or (np.isinf(reward) and reward < 0) or reward is None
 
         # only return the state, the agent does not need the measurement
-        return outputs, reward, self.is_done, {}
+        return outputs, reward, self.is_done, dict(risk=risk)
 
     def render(self, mode: str = 'human', close: bool = False) -> List[Figure]:
         """
