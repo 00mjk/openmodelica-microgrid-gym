@@ -42,30 +42,33 @@ iLimit = 30  # inverter current limit / A
 iNominal = 20  # nominal inverter current / A
 mu = 2  # factor for barrier function (see below)
 i_ref = np.array([8, 0, 0])  # exemplary set point i.e. id = 15, iq = 0, i0 = 0 / A
-R=20                         #sets the resistance value of RL
+R=20  #sets the resistance value of RL
+load_jump=5  #defines the load jump that is implemented at every quarter of the simulation time
 
 
-#Creation of a random walk of the load step: The starting value of the the resistance is 20 Ohm.
-#Every step, it goes either 1 Ohm up or down for a third of the simulation time.
-#After 1/3 of the simulation time the random walk of the load jump is finished.
-#The controller is now given time to control the current to its setpoint.
+#The starting value of the the resistance is 20 Ohm.
+#Every step and therefore the whole simulationt time, it randomly changes +/- 0.01 Ohm to generate noise.
+#Every quarter of the simulation time, a bigger load jump is implemented.
+#After 3/4 of the simulation time, the controller is given time to control the current to its setpoint
 
-# def load_step_random_walk():
-#     seed(1)
-#     random_walk = []
-#     random_walk.append(R)
-#     load_step_time = int(max_episode_steps * 1/3) # 1/3 of the simulation time
-#     for i in range(1, load_step_time):
-#         movement = -1 if random() < 0.5 else 1
-#         value = random_walk[i - 1] + movement
-#         if value < 0:
-#             value = 0
-#         random_walk.append(value)
-#     return random_walk
-#
-# #This function is used to give values to the resistor
-# def resistor_parameters(t):
-#     load_step_random_walk() #the function is called to get the list of the parameters
+def load_step_random_walk():
+    random_walk = []
+    random_walk.append(R)
+    load_step_t1 = max_episode_steps * 0.25
+    load_step_t2 = max_episode_steps * 0.5
+    load_step_t3 = max_episode_steps * 0.75
+    for i in range(1, max_episode_steps):
+        movement = -0.01 if random() < 0.5 else 0.01
+        value = random_walk[i - 1] + movement
+        if value < 0:
+            value = 0
+        if i == load_step_t1 or i == load_step_t2 or i == load_step_t3:
+            movement = load_jump if random() < 0.5 else -1*load_jump
+            value = random_walk[i - 1] + movement
+        random_walk.append(value)
+    return random_walk
+
+
 
 
 
