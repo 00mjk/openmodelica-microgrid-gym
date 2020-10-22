@@ -11,6 +11,7 @@ import GPy
 import gym
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 
 from openmodelica_microgrid_gym import Runner
 from openmodelica_microgrid_gym.agents import SafeOptAgent
@@ -44,6 +45,7 @@ mu = 2  # factor for barrier function (see below)
 i_ref = np.array([8, 0, 0])  # exemplary set point i.e. id = 15, iq = 0, i0 = 0 / A
 R=20  #sets the resistance value of RL
 load_jump=5  #defines the load jump that is implemented at every quarter of the simulation time
+ts= .5e-4
 
 
 #The starting value of the the resistance is 20 Ohm.
@@ -59,18 +61,24 @@ def load_step_random_walk():
     load_step_t3 = max_episode_steps * 0.75
     for i in range(1, max_episode_steps):
         movement = -0.01 if random() < 0.5 else 0.01
-        value = random_walk[i - 1] + movement
+        value=random_walk[i-1] + movement
         if value < 0:
             value = 0
-        if i == load_step_t1 or i == load_step_t2 or i == load_step_t3:
-            movement = load_jump if random() < 0.5 else -1*load_jump
-            value = random_walk[i - 1] + movement
+        #if i == load_step_t1 or i == load_step_t2 or i == load_step_t3:
+           # movement = load_jump if random() < 0.5 else -1*load_jump
+            #value = random_walk[i - 1] + movement
         random_walk.append(value)
     return random_walk
 
+def load_step(t):
+    list_resistor=load_step_random_walk()
+    for i in range(1,len(list_resistor)):
+        if t <= ts * i + ts:
+            return list_resistor[i]
 
 
 
+load_step
 
 class Reward:
     def __init__(self):
@@ -236,9 +244,9 @@ if __name__ == '__main__':
                    ],
                    log_level=logging.INFO,
                    viz_mode='episode',
-                   model_params={'rl1.resistor1.R': 20,
-                                 'rl1.resistor2.R': 20,
-                                 'rl1.resistor3.R': 20,
+                   model_params={'rl1.resistor1.R': load_step,
+                                 'rl1.resistor2.R': load_step,
+                                 'rl1.resistor3.R': load_step,
                                  'rl1.inductor1.L': 0.001,
                                  'rl1.inductor2.L': 0.001,
                                  'rl1.inductor3.L': 0.001
@@ -299,8 +307,11 @@ if __name__ == '__main__':
         best_agent_plt.show()
         best_agent_plt.savefig('agent_plt.png')
 
-
-df = env.history.df[['lc1.inductor1.i', 'lc1.inductor2.i']]
-print(df)
-mean_lc1 = df["lc1.inductor1.i"].mean()
-mean_lc2 = df["lc1.inductor2.i"].mean()
+pd.set_option('display.max_rows', None)
+pd.set_option('display.max_columns', None)
+pd.set_option('display.width', None)
+pd.set_option('display.max_colwidth', -1)
+#df = env.history.df[['lc1.inductor1.i', 'lc1.inductor2.i','rl1.resistor1.R']]
+#print(df)
+#mean_lc1 = df["lc1.inductor1.i"].mean()
+#mean_lc2 = df["lc1.inductor2.i"].mean()
