@@ -45,13 +45,13 @@ mu = 2  # factor for barrier function (see below)
 i_ref = np.array([8, 0, 0])  # exemplary set point i.e. id = 15, iq = 0, i0 = 0 / A
 R=20  #sets the resistance value of RL
 load_jump=5  #defines the load jump that is implemented at every quarter of the simulation time
-ts= .5e-4
+ts= 1e-4
 
 
 #The starting value of the the resistance is 20 Ohm.
 #Every step and therefore the whole simulationt time, it randomly changes +/- 0.01 Ohm to generate noise.
-#Every quarter of the simulation time, a bigger load jump is implemented.
-#After 3/4 of the simulation time, the controller is given time to control the current to its setpoint
+#Every quarter of the simulation time, a bigger load jump of 5  Ohms is implemented.
+#After 3/4 of the simulation time, the controller is given time to control the current to its setpoint.
 
 def load_step_random_walk():
     random_walk = []
@@ -64,21 +64,25 @@ def load_step_random_walk():
         value=random_walk[i-1] + movement
         if value < 0:
             value = 0
-        #if i == load_step_t1 or i == load_step_t2 or i == load_step_t3:
-           # movement = load_jump if random() < 0.5 else -1*load_jump
-            #value = random_walk[i - 1] + movement
+        if i == load_step_t1 or i == load_step_t2 or i == load_step_t3:
+            movement = load_jump if random() < 0.5 else -1*load_jump
+            value = random_walk[i - 1] + movement
         random_walk.append(value)
     return random_walk
 
+print(load_step_random_walk())
+print(len(load_step_random_walk()))
+list_resistor=load_step_random_walk()
+
 def load_step(t):
-    list_resistor=load_step_random_walk()
     for i in range(1,len(list_resistor)):
         if t <= ts * i + ts:
             return list_resistor[i]
 
 
 
-load_step
+
+
 
 class Reward:
     def __init__(self):
