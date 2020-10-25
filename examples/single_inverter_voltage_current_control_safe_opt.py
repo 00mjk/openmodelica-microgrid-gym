@@ -20,6 +20,7 @@ from openmodelica_microgrid_gym.aux_ctl import PI_params, DroopParams, MultiPhas
 from openmodelica_microgrid_gym.env import PlotTmpl
 from openmodelica_microgrid_gym.net import Network
 from openmodelica_microgrid_gym.util import dq0_to_abc, nested_map, FullHistory
+from random import random
 
 # Simulation definitions
 net = Network.load('../net/net_single-inv-curr.yaml')
@@ -30,6 +31,41 @@ iNominal = 20  # nominal inverter current / A
 mu = 2  # factor for barrier function (see below)
 DroopGain = 40000.0  # virtual droop gain for active power / W/Hz
 QDroopGain = 1000.0  # virtual droop gain for reactive power / VAR/V
+R=20  #sets the resistance value of RL
+load_jump=5 #defines the load jump that is implemented at every quarter of the simulation time
+ts= 1e-4
+
+#The starting value of the the resistance is 20 Ohm.
+#Every step and therefore the whole simulationt time, it randomly changes +/- 0.01 Ohm to generate noise.
+#Every quarter of the simulation time, a bigger load jump of 5  Ohms is implemented.
+#After 3/4 of the simulation time, the controller is given time to control the current to its setpoint.
+
+def load_step_random_walk():
+    random_walk = []
+    random_walk.append(R)
+    load_step_t1 = max_episode_steps * 0.25
+    load_step_t2 = max_episode_steps * 0.5
+    load_step_t3 = max_episode_steps * 0.75
+    for i in range(1, max_episode_steps):
+        movement = -0.01 if random() < 0.5 else 0.01
+        value=random_walk[i-1] + movement
+        if value < 0:
+            value = 1
+        if i == load_step_t1 or i == load_step_t2 or i == load_step_t3:
+            movement = load_jump if random() < 0.5 else -1*load_jump
+            value = random_walk[i - 1] + movement
+        random_walk.append(value)
+    return random_walk
+
+#print(load_step_random_walk())
+#print(len(load_step_random_walk()))
+list_resistor=load_step_random_walk()
+
+def load_step(t):
+    for i in range(1,len(list_resistor)):
+        if t <= ts * i + ts:
+            return list_resistor[i]
+
 
 # Files saves results and  resulting plots to the folder saves_VI_control_safeopt in the current directory
 current_directory = os.getcwd()
@@ -185,6 +221,12 @@ if __name__ == '__main__':
         time = strftime("%Y-%m-%d %H_%M_%S", gmtime())
         fig.savefig(save_folder + '/abc_voltage' + time + '.pdf')
 
+    def xylables_R(fig):
+        ax = fig.gca()
+        ax.set_xlabel(r'$t\,/\,\mathrm{s}$') #zeit
+        ax.set_ylabel('$R_{\mathrm{123}}\,/\,\mathrm{Ohm}$') #widerstände definieren , ohm angucken backslash omega
+        ax.grid(which='both')
+        # fig.savefig('Inductor_currents.pdf')
 
     def xylables_v_dq0(fig):
         ax = fig.gca()
@@ -198,11 +240,14 @@ if __name__ == '__main__':
     env = gym.make('openmodelica_microgrid_gym:ModelicaEnv_test-v1',
                    reward_fun=Reward().rew_fun,
                    viz_cols=[
-                       PlotTmpl([f'lc1.inductor{i}.i' for i in '123'],
+                       PlotTmpl([f'lc1.inductor{i}.i' for i in '123'], #123
                                 callback=xylables_i
                                 ),
-                       PlotTmpl([f'lc1.capacitor{i}.v' for i in '123'],
+                       PlotTmpl([f'lc1.capacitor{i}.v' for i in '123'], #123
                                 callback=xylables_v_abc
+                                ),
+                       PlotTmpl([f'rl1.resistor{i}.R' for i in '123'],  # Plot Widerstand RL
+                                callback=xylables_R
                                 ),
                        PlotTmpl([f'master.CVV{i}' for i in 'dq0'],
                                 callback=xylables_v_dq0
@@ -210,6 +255,13 @@ if __name__ == '__main__':
                    ],
                    log_level=logging.INFO,
                    viz_mode='episode',
+                   model_params={'rl1.resistor1.R': load_step,
+                                 'rl1.resistor2.R': load_step,
+                                 'rl1.resistor3.R': load_step,
+                                 'rl1.inductor1.L': 0.001,
+                                 'rl1.inductor2.L': 0.001,
+                                 'rl1.inductor3.L': 0.001
+                                 },
                    max_episode_steps=max_episode_steps,
                    net=net,
                    model_path='../omg_grid/grid.network_singleInverter.fmu',

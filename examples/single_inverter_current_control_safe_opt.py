@@ -37,14 +37,14 @@ if adjust not in {'Kp', 'Ki', 'Kpi'}:
 
 # Simulation definitions
 net = Network.load('../net/net_single-inv-curr.yaml')
-max_episode_steps = 1200  # number of simulation steps per episode
+max_episode_steps = 600  # number of simulation steps per episode
 num_episodes = 1  # number of simulation episodes (i.e. SafeOpt iterations)
 iLimit = 30  # inverter current limit / A
 iNominal = 20  # nominal inverter current / A
 mu = 2  # factor for barrier function (see below)
-i_ref = np.array([8, 0, 0])  # exemplary set point i.e. id = 15, iq = 0, i0 = 0 / A
+i_ref = np.array([10, 0, 0])  # exemplary set point i.e. id = 15, iq = 0, i0 = 0 / A
 R=20  #sets the resistance value of RL
-load_jump=5  #defines the load jump that is implemented at every quarter of the simulation time
+load_jump=5 #defines the load jump that is implemented at every quarter of the simulation time
 ts= 1e-4
 
 
@@ -63,16 +63,16 @@ def load_step_random_walk():
         movement = -0.01 if random() < 0.5 else 0.01
         value=random_walk[i-1] + movement
         if value < 0:
-            value = 0
+            value = 1
         if i == load_step_t1 or i == load_step_t2 or i == load_step_t3:
             movement = load_jump if random() < 0.5 else -1*load_jump
             value = random_walk[i - 1] + movement
         random_walk.append(value)
     return random_walk
 
-print(load_step_random_walk())
-print(len(load_step_random_walk()))
-list_resistor=load_step_random_walk()
+#print(load_step_random_walk())
+#print(len(load_step_random_walk()))
+#list_resistor=load_step_random_walk()
 
 def load_step(t):
     for i in range(1,len(list_resistor)):
