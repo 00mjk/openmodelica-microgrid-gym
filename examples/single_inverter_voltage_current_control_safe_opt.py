@@ -19,13 +19,13 @@ from openmodelica_microgrid_gym.agents.util import MutableFloat
 from openmodelica_microgrid_gym.aux_ctl import PI_params, DroopParams, MultiPhaseDQ0PIPIController
 from openmodelica_microgrid_gym.env import PlotTmpl
 from openmodelica_microgrid_gym.net import Network
-from openmodelica_microgrid_gym.util import dq0_to_abc, nested_map, FullHistory
+from openmodelica_microgrid_gym.util import dq0_to_abc, nested_map, FullHistory, abc_to_dq0
 from random import random
 
 # Simulation definitions
 net = Network.load('../net/net_single-inv-curr.yaml')
 max_episode_steps = 300  # number of simulation steps per episode
-num_episodes = 30  # number of simulation episodes (i.e. SafeOpt iterations)
+num_episodes = 1  # number of simulation episodes (i.e. SafeOpt iterations)
 iLimit = 30  # inverter current limit / A
 iNominal = 20  # nominal inverter current / A
 mu = 2  # factor for barrier function (see below)
@@ -66,6 +66,8 @@ def load_step(t):
         if t <= ts * i + ts:
             return list_resistor[i]
 
+#Data of the Current and Voltage in the Inverter in dq-coordinates
+
 
 # Files saves results and  resulting plots to the folder saves_VI_control_safeopt in the current directory
 current_directory = os.getcwd()
@@ -77,7 +79,7 @@ class Reward:
     def __init__(self):
         self._idx = None
 
-    def set_idx(self, obs):
+    def set_idx(self, obs):      #[f'lc1.inductor{k}.i' for k in '123']
         if self._idx is None:
             self._idx = nested_map(
                 lambda n: obs.index(n),
@@ -224,9 +226,18 @@ if __name__ == '__main__':
     def xylables_R(fig):
         ax = fig.gca()
         ax.set_xlabel(r'$t\,/\,\mathrm{s}$') #zeit
-        ax.set_ylabel('$R_{\mathrm{123}}\,/\,\mathrm{Ohm}$') #widerstände definieren , ohm angucken backslash omega
+        ax.set_ylabel('$R_{\mathrm{123}}\,/\,\mathrm{\u03A9}$') #widerstände definieren , ohm angucken backslash omega
         ax.grid(which='both')
-        # fig.savefig('Inductor_currents.pdf')
+        time = strftime("%Y-%m-%d %H_%M_%S", gmtime())
+        fig.savefig(save_folder + '/Resistor_Course_Load_Step' +time +'.pdf')
+
+    def xylables_i_dq0(fig):
+        ax = fig.gca()
+        ax.set_xlabel(r'$t\,/\,\mathrm{s}$')
+        ax.set_ylabel('$i_{\mathrm{dq0}}\,/\,\mathrm{i}$')
+        ax.grid(which='both')
+        time = strftime("%Y-%m-%d %H_%M_%S", gmtime())
+        fig.savefig(save_folder + '/dq0_current' + time + '.pdf')
 
     def xylables_v_dq0(fig):
         ax = fig.gca()
@@ -235,6 +246,8 @@ if __name__ == '__main__':
         ax.grid(which='both')
         time = strftime("%Y-%m-%d %H_%M_%S", gmtime())
         fig.savefig(save_folder + '/dq0_voltage' + time + '.pdf')
+
+
 
 
     env = gym.make('openmodelica_microgrid_gym:ModelicaEnv_test-v1',
@@ -248,6 +261,9 @@ if __name__ == '__main__':
                                 ),
                        PlotTmpl([f'rl1.resistor{i}.R' for i in '123'],  # Plot Widerstand RL
                                 callback=xylables_R
+                                ),
+                       PlotTmpl([f'master.CVi{s}' for s in 'dq0'],  # Plot Widerstand RL I=s
+                                callback=xylables_i_dq0
                                 ),
                        PlotTmpl([f'master.CVV{i}' for i in 'dq0'],
                                 callback=xylables_v_dq0
@@ -293,3 +309,12 @@ if __name__ == '__main__':
         ax.set_title('Best Episode')
         best_env_plt[ii].show()
         # best_env_plt[0].savefig('best_env_plt.png')
+
+
+#### Data of the currents/voltages to be analyzed with the help of Pandas
+
+df1=env.history.df[['lc1.inductor1.i', 'lc1.inductor2.i', 'lc1.inductor3.i']]
+
+df2 = env.history.df[[f'master.CVid']] #current through the Maste-Inverter in dq-coordinates
+
+print(df2)
