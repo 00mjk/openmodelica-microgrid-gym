@@ -29,11 +29,13 @@ num_episodes = 1  # number of simulation episodes (i.e. SafeOpt iterations)
 iLimit = 30  # inverter current limit / A
 iNominal = 20  # nominal inverter current / A
 mu = 2  # factor for barrier function (see below)
-DroopGain = 40000.0  # virtual droop gain for active power / W/Hz
-QDroopGain = 1000.0  # virtual droop gain for reactive power / VAR/V
+DroopGain =0 # virtual droop gain for active power / W/Hz 40000
+QDroopGain =0   # virtual droop gain for reactive power / VAR/V 1000
 R=20  #sets the resistance value of RL
 load_jump=5 #defines the load jump that is implemented at every quarter of the simulation time
 ts= 1e-4
+v_ref = np.array([325, 0, 0])  #muss ich noch anpassen, wo kriege ich die her
+
 
 #The starting value of the the resistance is 20 Ohm.
 #Every step and therefore the whole simulationt time, it randomly changes +/- 0.01 Ohm to generate noise.
@@ -47,11 +49,12 @@ def load_step_random_walk():
     load_step_t2 = max_episode_steps * 0.5
     load_step_t3 = max_episode_steps * 0.75
     for i in range(1, max_episode_steps):
-        movement = -0.01 if random() < 0.5 else 0.01
-        value=random_walk[i-1] + movement
+        #movement = -0.01 if random() < 0.5 else 0.01
+        #value=random_walk[i-1] + movement
+        value=random_walk[i-1]
         if value < 0:
             value = 1
-        if i == load_step_t1 or i == load_step_t2 or i == load_step_t3:
+        if i == load_step_t1 or i == load_step_t2:  #or i==load_step_t3
             movement = load_jump if random() < 0.5 else -1*load_jump
             value = random_walk[i - 1] + movement
         random_walk.append(value)
@@ -311,10 +314,48 @@ if __name__ == '__main__':
         # best_env_plt[0].savefig('best_env_plt.png')
 
 
-#### Data of the currents/voltages to be analyzed with the help of Pandas
+#Data of the currents/voltages to be analyzed with the help of Pandas
+df_inductor_i=env.history.df[['lc1.inductor1.i', 'lc1.inductor2.i', 'lc1.inductor3.i']]
+df_master_CVV = env.history.df[['master.CVVd']] #voltage for the Controller, it is the measurement of the Master-Inverter's Voltage
+#master_CVV_np=df_master_CVV.to_numpy()
+# print((df_master_CVV.iloc[:int(max_episode_steps/3)].max()))
+# print((df_master_CVV.iloc[:int(max_episode_steps/4)].max()/v_ref[0])-1)   #calculation of the
 
-df1=env.history.df[['lc1.inductor1.i', 'lc1.inductor2.i', 'lc1.inductor3.i']]
 
-df2 = env.history.df[[f'master.CVid']] #current through the Maste-Inverter in dq-coordinates
 
-print(df2)
+class Metrics:
+    ref_value=v_ref[0]
+    def __init__(self,quantity):
+       self.quantity=quantity  #here the class is given any quantity to calculate the metrics
+
+    def overshoot(self):         #it's an underdamped system
+        max_quantity=self.quantity.iloc[:int(max_episode_steps/4)].max()
+        overshoot=(max_quantity/self.ref_value)-1
+        return overshoot
+
+    def rise_time(self):        #it's an underdamped system, that's why it's 0% to 100% of its value
+        print(self.quantity)
+
+list1=[1,2,3]
+voltage_controller_metrics= Metrics(df_master_CVV)
+print(voltage_controller_metrics.overshoot())
+#print(voltage_controller_metrics.overshoot())
+
+
+
+
+
+
+
+    # def rise_time(self):  #tr
+    #
+    # def settling_time(self):
+    #
+    # def MSE(self):
+
+
+
+
+
+    # def steady_state_error (self):  #If not PI-controller
+
