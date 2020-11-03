@@ -12,6 +12,7 @@ from typing import List
 import GPy
 import gym
 import numpy as np
+import pandas as pd
 
 from openmodelica_microgrid_gym import Runner
 from openmodelica_microgrid_gym.agents import SafeOptAgent
@@ -24,7 +25,7 @@ from random import random
 
 # Simulation definitions
 net = Network.load('../net/net_single-inv-curr.yaml')
-max_episode_steps = 300  # number of simulation steps per episode
+max_episode_steps =300   # number of simulation steps per episode
 num_episodes = 1  # number of simulation episodes (i.e. SafeOpt iterations)
 iLimit = 30  # inverter current limit / A
 iNominal = 20  # nominal inverter current / A
@@ -32,7 +33,7 @@ mu = 2  # factor for barrier function (see below)
 DroopGain =0 # virtual droop gain for active power / W/Hz 40000
 QDroopGain =0   # virtual droop gain for reactive power / VAR/V 1000
 R=20  #sets the resistance value of RL
-load_jump=5 #defines the load jump that is implemented at every quarter of the simulation time
+load_jump=10 #defines the load jump that is implemented at every quarter of the simulation time
 ts= 1e-4
 v_ref = np.array([325, 0, 0])  #muss ich noch anpassen, wo kriege ich die her
 
@@ -316,7 +317,18 @@ if __name__ == '__main__':
 
 #Data of the currents/voltages to be analyzed with the help of Pandas
 df_inductor_i=env.history.df[['lc1.inductor1.i', 'lc1.inductor2.i', 'lc1.inductor3.i']]
+pd.set_option('display.max_rows', None)
 df_master_CVV = env.history.df[['master.CVVd']] #voltage for the Controller, it is the measurement of the Master-Inverter's Voltage
+print(df_master_CVV)
+sliced_array=df_master_CVV.iloc[int(1.04*max_episode_steps/2):]  #stores the values after the second load jump in an array
+print(sliced_array)
+upper_bound= 1.02*v_ref[0] #The settling time is defined as the time when the inverter's voltage is
+lower_bound=0.98*v_ref[0]  #within the upper and lower bound of the set value at Steady State for the first time
+print(sliced_array[(sliced_array['master.CVVd'] >=lower_bound) & (sliced_array['master.CVVd']<=upper_bound)].index[0])
+
+
+
+
 #master_CVV_np=df_master_CVV.to_numpy()
 # print((df_master_CVV.iloc[:int(max_episode_steps/3)].max()))
 # print((df_master_CVV.iloc[:int(max_episode_steps/4)].max()/v_ref[0])-1)   #calculation of the
@@ -324,22 +336,37 @@ df_master_CVV = env.history.df[['master.CVVd']] #voltage for the Controller, it 
 
 
 class Metrics:
-    ref_value=v_ref[0]
+    ref_value=v_ref[0] #set value of inverter that serves as a set value for the outer voltage controller
+    ts=1e-4 #duration of the episodes in seconds
     def __init__(self,quantity):
        self.quantity=quantity  #here the class is given any quantity to calculate the metrics
 
     def overshoot(self):         #it's an underdamped system
         max_quantity=self.quantity.iloc[:int(max_episode_steps/4)].max()
+        #max_quantity=self.quantity.loc[int(max_episode_steps/4), ['master.CVVd']].max()
         overshoot=(max_quantity/self.ref_value)-1
         return overshoot
 
     def rise_time(self):        #it's an underdamped system, that's why it's 0% to 100% of its value
-        print(self.quantity)
+        position_rise_time=self.quantity[self.quantity['master.CVVd'] >= self.ref_value].index[0]
+        rise_time_in_seconds= position_rise_time * ts
+        return rise_time_in_seconds
 
-list1=[1,2,3]
+    #def settling_time(self):
+        #sliced_array=self.quantity.iloc[int(max_episode_steps/2+6):]  #stores the values after the second load jump (a little delay +6) in an array
+        #upper_bound= 1.02*self.ref_value #The settling time is defined as the time when the inverter's voltage is
+        #lower_bound=0.98*self.ref_value  #within the upper and lower bound of the set value for the first time at Steady State
+        #position_settling_time = sliced_array[(sliced_array['master.CVVd'] >=lower_bound) and (self.quantity['master.CVVd']<= upper_bound)].index[0] #returns the position of the settling time
+        #settling_time_in_seconds=position_settling_time * ts
+        #return settling_time_in_seconds
+
 voltage_controller_metrics= Metrics(df_master_CVV)
 print(voltage_controller_metrics.overshoot())
+print(voltage_controller_metrics.rise_time())
+#print(voltage_controller_metrics.settling_time())
 #print(voltage_controller_metrics.overshoot())
+
+
 
 
 
